@@ -6,4 +6,5 @@ package message;
 public enum NodeType {
     MASTER,
     SLAVE,
+    ROOT,
 }

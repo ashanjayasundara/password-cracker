@@ -10,10 +10,8 @@ public class HBMsg extends DynamicMsg {
     private String masterID;
 
     public HBMsg(long publishTime, String masterID) {
-        _msgType = this.getClass().getCanonicalName();
         this.publishTime = publishTime;
         this.masterID = masterID;
-        _msgType = this.getClass().getCanonicalName();
     }
 
     public long getPublishTime() {

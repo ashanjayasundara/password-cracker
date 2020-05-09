@@ -4,6 +4,7 @@ import org.ini4j.Profile;
 import org.ini4j.Wini;
 
 import java.io.File;
+import java.net.InetAddress;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,8 @@ public class ConfigReader {
     static {
         ExceptionHandler.unhandled(() -> {
             environmentConfigs = normalizeConfigs(read("conf/envmanconf.ini"));
+            InetAddress inetAddress = InetAddress.getLocalHost();
+            environmentConfigs.put("SCALECUBE_CON_STR",inetAddress.getHostAddress());
         });
     }
 
