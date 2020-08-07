@@ -23,7 +23,7 @@ public class ConfigReader {
         });
     }
 
-    static Map<String, String> read(String fileName) throws Exception {
+    private static Map<String, String> read(String fileName) throws Exception {
         Map<String, String> configs = new HashMap<>();
         Wini ini = new Wini(new File(fileName));
         for (String key : ini.keySet()) {
@@ -38,7 +38,7 @@ public class ConfigReader {
         return configs;
     }
 
-    static Map<String, String> normalizeConfigs(Map<String, String> config) {
+    private static Map<String, String> normalizeConfigs(Map<String, String> config) {
         Map<String, String> normalized = new HashMap<>();
         for (Map.Entry<String, String> entry : config.entrySet()) {
             normalized.put(entry.getKey(), StringNormalizer.normalize(entry.getValue()));

@@ -9,16 +9,22 @@ import io.scalecube.net.Address;
 public class LeaderElectionResultMsg extends DynamicMsg {
     public enum Status {
         SELECTED,
-        PENDING;
+        UPDATED;
 
     }
 
     private Address masterAddress;
     private Status status;
+    private String memberID;
 
-    public LeaderElectionResultMsg(Address masterAddress, Status status) {
+    public LeaderElectionResultMsg(Address masterAddress, Status status, String memberID) {
         this.masterAddress = masterAddress;
         this.status = status;
+        this.memberID = memberID;
+    }
+
+    public String getMemberID() {
+        return memberID;
     }
 
     public LeaderElectionResultMsg(Address masterAddress) {

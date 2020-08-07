@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 /**
  * @author ashan on 2020-05-03
@@ -32,11 +33,11 @@ public class ClusterInitializer implements ClusterMessageHandler, ITimerCallback
     private static final Logger LOGGER = LoggerFactory.getLogger(ClusterInitializer.class);
     private static Address leaderAddress;
     private ClusterStatus clusterStatus = ClusterStatus.WAIT_FOR_LEADER;
-    private final static ReentrantLock leaderLock = new ReentrantLock(true);
     private List<AutoCloseable> resourceManager = new ArrayList<>();
     private MessageHandler messageHandler;
     private NodeTimer clusterTimer;
     private Map<String, Member> seedMemberMap = new ConcurrentHashMap<String, Member>();
+    private int leaderWaitCount = 0;
 
     private ClusterInitializer() {
         LOGGER.info("Initializing Root Cluster");
@@ -48,7 +49,8 @@ public class ClusterInitializer implements ClusterMessageHandler, ITimerCallback
                 .startAwait();
         messageHandler = new MessageHandler(rootCluster, currentNodeID);
         clusterTimer = new NodeTimer(rootCluster, "CLUSTER_EVENT_SCHEDULER", true, 5, this).start();
-        LOGGER.error("Root Cluster Initialization Completed");
+        resourceManager.add(clusterTimer);
+        LOGGER.warn("Root Cluster Initialization Completed");
     }
 
     private static void initialize() {
@@ -96,12 +98,22 @@ public class ClusterInitializer implements ClusterMessageHandler, ITimerCallback
             clusterStatus = ClusterStatus.PENDING_ELECTION;
         } else if (msg instanceof TimerResponse) {
             this.onTimer(((TimerResponse) msg).getTimerID());
+        } else if (msg instanceof RequestActiveNodeData) {
+            messageHandler.sendReply(message.sender(), new ResponseActiveNodeData(seedMemberMap.values().stream().map(Member::address).collect(Collectors.toList())));
+        } else if (msg instanceof LeaderElectionResultMsg) {
+            LeaderElectionResultMsg resultMsg = (LeaderElectionResultMsg) msg;
+            clusterStatus = ClusterStatus.LEADER_ELECTED;
+            LOGGER.info("Leader Election Result Received : " + resultMsg.getMemberID());
+        } else if (msg instanceof HBMsg) {
+            HBMsg hbMsg = (HBMsg) msg;
+            LOGGER.info("hb received from : " + hbMsg.getMasterID());
         }
 
     }
 
     @Override
     public void onMembershipEvent(MembershipEvent event) {
+        System.out.println("root event : " + event);
         if (event.isAdded()) {
             seedMemberMap.put(event.member().alias(), event.member());
         } else if (event.isLeaving() || event.isRemoved()) {
@@ -112,16 +124,25 @@ public class ClusterInitializer implements ClusterMessageHandler, ITimerCallback
 
     @Override
     public void onTimer(String timer) {
+        LOGGER.info("SysMan Timer : " + timer + " Leader : " + clusterStatus + " seed Count : " + seedMemberMap.size());
         if (timer.equalsIgnoreCase("CLUSTER_EVENT_SCHEDULER")) {
-            if (clusterStatus == ClusterStatus.WAIT_FOR_LEADER && seedMemberMap.size() > 2) {
+            if ((clusterStatus == ClusterStatus.WAIT_FOR_LEADER && seedMemberMap.size() > 2) || leaderWaitCount >10) {
                 initiateLeaderElection();
+            } else if (clusterStatus == ClusterStatus.PENDING_ELECTION) {
+                leaderWaitCount++;
             }
         }
     }
 
     @Override
     public void close() throws Exception {
-
+        resourceManager.forEach(x -> {
+            try {
+                x.close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
     }
 
 
@@ -129,5 +150,6 @@ public class ClusterInitializer implements ClusterMessageHandler, ITimerCallback
         Member member = new ArrayList<>(seedMemberMap.values()).get(0);
         messageHandler.sendMessage(member.address(), new LeaderElectionRequestMsg(rootCluster.address(), rootCluster.member().alias()));
         clusterStatus = ClusterStatus.PENDING_ELECTION;
+        leaderWaitCount = 0;
     }
 }
